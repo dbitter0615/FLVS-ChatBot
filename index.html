@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FLVS Student Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        #chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        #chat-container::-webkit-scrollbar-thumb {
+            background-color: #94a3b8;
+            border-radius: 10px;
+            border: 2px solid #f1f5f9;
+        }
+        /* Styling for the responsive iframe container */
+        .iframe-container {
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            padding-top: 56.25%; /* 16:9 Aspect Ratio */
+        }
+        .iframe-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-2xl mx-2 sm:mx-4 my-4 sm:my-8 bg-white rounded-2xl shadow-2xl flex flex-col h-[95vh] sm:h-[90vh]">
+        <!-- Header -->
+        <header class="bg-blue-600 text-white p-5 rounded-t-2xl shadow-md flex items-center">
+            <svg class="w-10 h-10 mr-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+            </svg>
+            <div>
+                <h1 class="text-xl font-bold">FLVS Student Assistant</h1>
+                <p class="text-sm opacity-90">Your Instant Helper for US Government with Mr. Bitter</p>
+            </div>
+        </header>
+
+        <!-- Chat Container -->
+        <div id="chat-container" class="flex-1 p-6 overflow-y-auto">
+            <!-- Messages will be injected here by JavaScript -->
+        </div>
+
+        <!-- Input Area -->
+        <footer class="p-4 bg-white border-t border-slate-200 rounded-b-2xl">
+            <div class="flex items-center space-x-3">
+                <input type="text" id="user-input" placeholder="Ask about an assignment like 'How to do 1.02?'" class="flex-1 p-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                <button id="send-btn" class="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all duration-300 shadow-md flex items-center justify-center w-14 h-12">
+                    <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                    </svg>
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // --- CHATBOT STATE & KNOWLEDGE BASE ---
+        let conversationContext = null; 
+        let pendingDbaSchedule = false;
+        let pendingDbaPrep = false;
+        let pendingPacingInfo = false;
+
+        const knowledgeBase = {
+            general: {
+                greeting: "Hello! I'm your FLVS Student Assistant for US Government. I can provide you with immediate help you with questions about your assignments, course resources, and how to navigate the course. How can I help you today?<br><br><strong>Important:</strong> I must follow the FLVS Academic Integrity policy. I can guide you, but I cannot provide direct answers to assignment questions.",
+                academic_integrity: "I cannot provide answers or complete work for you. Doing so would violate the FLVS Academic Integrity Policy. My purpose is to help you understand *how* to do the assignments, not to do them for you. Please review your lesson materials or contact Mr. Bitter for help with the concepts. You can find his contact info by typing 'teacher contact'.",
+                unknown: "I'm not quite sure how to answer that. Could you try rephrasing? You can ask about a specific assignment (e.g., 'help with 1.05'), ask for a 'rubric', or type 'resources' to see a list of helpful links.",
+                teacher_contact: `You can get in touch with Mr. Bitter using the information below:<br>
+                                  - <strong>Office/Text:</strong> (863) 288-0660<br>
+                                  - <strong>Email:</strong> dbitter@learn.flvs.net`,
+                submission: `This video shows how to submit assignments: <a href="https://drive.google.com/file/d/1REfCjSpIFSJ6Fc0OCaQ6402LZiIbcp4G/view" target="_blank" class="text-blue-600 hover:underline">Submitting Assignments Help</a>.<br><br>It uses assignment 1.02 as an example, but the steps are the same for any assignment you upload.`,
+                thanks: "You're welcome! Is there anything else I can help you with?",
+                accessing_lessons: `This video will help you access your lessons: <a href="https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view" target="_blank" class="text-blue-600 hover:underline">Accessing Lessons Help</a>.`,
+                dba_info: "A Discussion-Based Assessment (DBA) is a verbal conversation with me to review what you've learned in a module. It's a required part of the course to ensure you understand the material before moving on. Make sure you review all the module resources before scheduling one!",
+                dba_prompt: "Sure, I can help with that. Which module DBA do you need to schedule: 1, 2, or 3?",
+                dba_prep_prompt: "I can give you some resources to help you prepare. Which module are you preparing for: 1, 2, or 3?",
+                pacing_prompt: "Of course. Which week are you working on (1-8)?",
+                live_lesson: `You can find the schedule for live lessons here: <a href="https://docs.google.com/presentation/d/e/2PACX-1vS-fHspFf6zactD9tRDeO5TYpa52zCynOb7K-E2ZKVyFglNVmKzQNb5siCD-H2PMhsamGOYQ7iMztUt/pub?start=false&loop=false&delayms=3000&slide=id.g215804181d0_0_187" target="_blank" class="text-blue-600 hover:underline">Live Lesson Calendar</a>.`,
+                tech_support: `If you're having technical issues, this presentation may help: <a href="https://docs.google.com/presentation/d/e/2PACX-1vTNtRwJrKpJXPr2JIZ4SrGWdUBf7AXR9eXdQQwvYd1xkWN6vQ1MZ5oJlhJCP9UW-bzBl8N_SLnpBHaZ/pub?start=false&loop=false&delayms=3000&slide=id.p" target="_blank" class="text-blue-600 hover:underline">Tech Support Page</a>`,
+                note_guides_link: `You can find all the note guides here: <a href="https://docs.google.com/presentation/d/e/2PACX-1vQWfz3NXCatOxM5bpm1U70hzHdSMx7Xi09lGXVpxNVsQgPjTMIxVHslyXlOjy10onT5KGuLM0TkHqg4/pub?start=false&loop=false&delayms=3000&slide=id.g1e238e0a5e1_0_1710" target="_blank" class="text-blue-600 hover:underline">Note Guides Presentation</a>.`,
+                review_videos: `Here is a collection of help and review videos: <a href="https://docs.google.com/presentation/d/e/2PACX-1vSCVJvmXACvxU9BlpaEjEpfeBlBzN2YwxueH6REMDospYlyvthVcIT5lHFpkYF-mVvMZECN5g5lcCd1/pub?start=false&loop=false&delayms=3000&slide=id.p" target="_blank" class="text-blue-600 hover:underline">Help and Review Videos</a>.`
+            },
+            pacing_details: {
+                "1": { "16-week": "1.00, 1.01, 1.02", "8-week": "1.00, 1.01, 1.02, 1.03, 1.04 + DBA" },
+                "2": { "16-week": "1.03, 1.04", "8-week": "1.05, 1.06, 1.07, 1.08" },
+                "3": { "16-week": "1.05, 1.06", "8-week": "1.09H*, 1.10 + DBA, 1.11, 2.00, 2.01" },
+                "4": { "16-week": "1.07, 1.08", "8-week": "2.02, 2.03, 2.04, 2.05" },
+                "5": { "16-week": "2.00, 2.01, 2.02", "8-week": "2.06, 2.07, 2.08, 2.09H*" },
+                "6": { "16-week": "2.03, 2.04", "8-week": "2.10 + DBA, 2.11, 3.00, 3.01, 3.02" },
+                "7": { "16-week": "2.05, 2.06", "8-week": "3.03, 3.04, 3.05, 3.06, 3.07" },
+                "8": { "16-week": "2.07, 2.08", "8-week": "3.08, 3.09H*, 3.10 + DBA, 3.11 (Final Exam)" }
+            },
+            dba_schedule: {
+                "1": `Here's the link to schedule your Module 1 DBA: <a href="https://calendly.com/dbitter-flvs/dba-module-1" class="text-blue-600 hover:underline" target="_blank"><strong>Schedule Module 1 DBA</strong></a>`,
+                "2": `Here's the link to schedule your Module 2 DBA: <a href="https://calendly.com/dbitter-flvs/dba-module-2" class="text-blue-600 hover:underline" target="_blank"><strong>Schedule Module 2 DBA</strong></a>`,
+                "3": `Here's the link to schedule your Module 3 DBA: <a href="https://calendly.com/dbitter-flvs/dba-module-3" class="text-blue-600 hover:underline" target="_blank"><strong>Schedule Module 3 DBA</strong></a>`
+            },
+            dba_prep: {
+                "1": { resources: `Here are the resources for your Module 1 DBA (We The People). Be sure to study before your appointment!<br><br><strong>Module 1 Resources:</strong><br><a href="https://docs.google.com/document/d/1WEv8h_IrIs4hQvmAo3kfVcs55rkkbjrtZ1YPV3tJTBA/edit?tab=t.0" class="text-blue-600 hover:underline" target="_blank">• Study Guide</a><br><a href="https://drive.google.com/file/d/1pa4QFH12MTfzzrVtB5r7Qrcpk_uVXaGj/view" class="text-blue-600 hover:underline" target="_blank">• Podcast/Audio Review</a><br><a href="https://docs.google.com/presentation/d/e/2PACX-1vSCVJvmXACvxU9BlpaEjEpfeBlBzN2YwxueH6REMDospYlyvthVcIT5lHFpkYF-mVvMZECN5g5lcCd1/pub?start=false&loop=false&delayms=3000&slide=id.g282996efce4_0_22" class="text-blue-600 hover:underline" target="_blank">• Video Review</a><br><a href="https://docs.google.com/presentation/d/e/2PACX-1vT9fWDTsLjb1MD2VrOZWvzJ3TH86Ubp-JswTYElYIlkTT29mpUhCqhD7SNcJK3fxgTrN-h9cxsfFZGO/pub?start=false&loop=false&delayms=3000&slide=id.g23e26c26a8e_0_0" class="text-blue-600 hover:underline" target="_blank">• Overall Help</a>` },
+                "2": { resources: `Here are the resources for your Module 2 DBA (Constitutional Government). Make sure you review the materials!<br><br><strong>Module 2 Resources:</strong><br><a href="https://docs.google.com/document/d/1U763407tmfP53fQ0R0DKmT7nizD9xgaX2zG2wPpUesA/edit?tab=t.0" class="text-blue-600 hover:underline" target="_blank">• Study Guide</a><br><a href="https://drive.google.com/file/d/1ZZhwmCd8LScMWtUKuu4ykUy875_5vRLU/view" class="text-blue-600 hover:underline" target="_blank">• Podcast/Audio Review</a><br><a href="https://docs.google.com/presentation/d/e/2PACX-1vSCVJvmXACvxU9BlpaEjEpfeBlBzN2YwxueH6REMDospYlyvthVcIT5lHFpkYF-mVvMZECN5g5lcCd1/pub?start=false&loop=false&delayms=3000&slide=id.g282996efce4_0_52" class="text-blue-600 hover:underline" target="_blank">• Video Review</a><br><a href="https://docs.google.com/presentation/d/e/2PACX-1vTofkoIjWPco1Y3QEzTAbXoXZUG8ZO8zdVghAkYh4sN0HNYrIgpbhgIPdjZf-GE4wx1DsVRuu1SbavM/pub?start=false&loop=false&delayms=3000&slide=id.g23e26c26ab0_0_0" class="text-blue-600 hover:underline" target="_blank">• Overall Help</a>` },
+                "3": { resources: `Here are the resources for your Module 3 DBA (Civic Participation). Good luck on your review!<br><br><strong>Module 3 Resources:</strong><br><a href="https://docs.google.com/document/d/17zeTW3_sW8A4LbuxhSYAuyJS5rw1fXCb3RsyEJSLQNY/edit?tab=t.0" class="text-blue-600 hover:underline" target="_blank">• Study Guide</a><br><a href="https://drive.google.com/file/d/1Qzc19lUpzjgMbXcevMi3qC_Z1HQZjGfa/view" class="text-blue-600 hover:underline" target="_blank">• Podcast/Audio Review</a><br><a href="https://docs.google.com/presentation/d/e/2PACX-1vSCVJvmXACvxU9BlpaEjEpfeBlBzN2YwxueH6REMDospYlyvthVcIT5lHFpkYF-mVvMZECN5g5lcCd1/pub?start=false&loop=false&delayms=3000&slide=id.g282996efce4_0_77" class="text-blue-600 hover:underline" target="_blank">• Video Review</a><br><a href="https://docs.google.com/presentation/d/e/2PACX-1vQQZYVU7TdaQiOp5KeJWq7b0ejPEA7K3OzrzG-3k4CnKG1gvEwi_ycIWUSdBCn3MFmnVd8hP5LlTzpS/pub?start=false&loop=false&delayms=3000&slide=id.g1e23c609ab6_0_0" class="text-blue-600 hover:underline" target="_blank">• Overall Help</a>` }
+            },
+            quiz_assignments: {
+                "1.01": "That's a great question! Assignment 1.01 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "1.03": "That's a great question! Assignment 1.03 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "1.06": "That's a great question! Assignment 1.06 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "1.08": "That's a great question! Assignment 1.08 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "2.01": "That's a great question! Assignment 2.01 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "2.03": "That's a great question! Assignment 2.03 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "2.05": "That's a great question! Assignment 2.05 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "2.06": "That's a great question! Assignment 2.06 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "2.08": "That's a great question! Assignment 2.08 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "3.01": "That's a great question! Assignment 3.01 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "3.02": "That's a great question! Assignment 3.02 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "3.04": "That's a great question! Assignment 3.04 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "3.06": "That's a great question! Assignment 3.06 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>",
+                "3.08": "That's a great question! Assignment 3.08 is a quiz that covers the concepts from the lesson. Make sure you have read through the lesson material carefully before you begin. If you need help accessing the quiz, this PDF will walk you through the steps: <a href='https://drive.google.com/file/d/1WBowI-FdsUWWq_gaHX_tAYj_slvVXakO/view?usp=drive_link' target='_blank' class='text-blue-600 hover:underline'>Accessing the Assignment</a>"
+            },
+            assignments: {
+                "1.02": { response: `For assignment 1.02, your task is to analyze one of three modern scenarios. You need to identify <strong>two</strong> founding principles that connect to it, explain that connection, and then explain how the Declaration of Independence reflects those same two principles. You also need to include a photo that represents one of the principles.<br><br>You can get the worksheet here: <a href="https://docs.google.com/document/d/1A7ecKjJX51AxOi1INnNnApDR9NNeowi5jI5pIEbayfw/copy" target="_blank" class="text-blue-600 hover:underline">1.02 Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Respond in complete paragraphs: 10 points<br>- Choose two founding principles that connect to your scenario: 20 points<br>- Explain the connection between the principles and the scenario: 20 points<br>- Explain how the Declaration reflects those two principles: 20 points<br>- Include a modern photograph representing a principle: 10 points<br>- Explain how the photograph reflects the principle: 20 points<br>- Check for spelling/grammar errors: 10 points<br><br>You can ask me for '1.02 scenarios' to see the options to choose from.<br><br><div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vT5Evmvqk_EOPv8sA4eXVPEvuMikGqrnPWc0U8UJRaF271XVV6EIWp-ciUwt4AuWITagwtC4otx4N2v/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>` },
+                "1.05": { response: `For assignment 1.05, you'll analyze how the U.S. Constitution is structured to meet the six goals outlined in its Preamble. For each goal, you'll provide a specific example from the Constitution and identify the Article where it's described.<br><br>Here is the template to help you organize your work: <a href="https://docs.google.com/document/d/1n6sthfqT4qNGOvbWmTzhdusv1_5sPgaCspcLmhzpc7Y/copy" target="_blank" class="text-blue-600 hover:underline">1.05 Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Using the template: 10 points<br>- Explaining how the Constitution promotes each of the 6 goals: 50 points total<br>- Answering the reflection question with support: 30 points<br>- Checking for grammar and spelling: 10 points<br><br><div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSHFZYQx8bkMumz7umziC4DSAsxdWDO5mxb-qoZrrtqkpP-ef3Pmy9SJ06-ArqSGAZ8wUQV2M0HKEXm/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>` },
+                "1.07": { response: `For assignment 1.07, you will choose one country (France, India, Japan, Mexico, or Venezuela) and analyze its government and economy using the CIA World Factbook and Freedom House websites.<br><br>Use this template to answer the questions: <a href="https://docs.google.com/document/d/1YFtUvcb23xGxsp6nLgPhFiy0FM3t45EWBpa9l_qH2pY/copy" target="_blank" class="text-blue-600 hover:underline">1.07 Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Organization/using template: 10 points<br>- Describing the type of government: 15 points<br>- Explaining features of democratization: 15 points<br>- Explaining the economic system: 15 points<br>- Comparing the country's economy to the US (with data): 15 points<br>- Explaining how the systems conflict/support U.S. principles: 20 points<br>- Checking for grammar and spelling: 10 points<br><br><div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vTCSiL76FNuD6UZmJsdpoUWkFcer68yFC2xaLmxk1H1f381bBRSqWxqzOdMEF_w_Wy0c2iGCUexpaqT/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>` },
+                "1.09": { response: `For the 1.09 Honors assignment, you will write an essay about a historical or modern event. You'll need to find three credible articles, cite them in MLA format, and analyze how the event connects to a U.S. founding principle.<br><br>This template will help structure your essay: <a href="https://docs.google.com/document/d/1qDvC7KZKjmAeQIEPo94iSLSYloJ2zkGIyMml6QVBcmA/copy" target="_blank" class="text-blue-600 hover:underline">1.09H Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Citing 3 articles in MLA format: 15 points<br>- Including an introduction and conclusion: 20 points<br>- Explaining the event and its effect on the country (with 2 pieces of evidence): 20 points<br>- Explaining how a founding principle is represented (with 2 pieces of evidence): 20 points<br>- Other content and grammar requirements: 25 points<br><br><strong><small>Note: This is an honors assignment and is not required if you are in the regular version of the course.</small></strong><br><br><div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSyd0f8htAfsBpwnJ-6ait0dpOBozqi-aF-ccM9fehZPvqEleqXGrRW69jdq8CzSqVvj4jb5WuMop2v/embed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`},
+                "2.02": { response: `For assignment 2.02, you will research a real bill that has been introduced in Congress within the last year using congress.gov or govtrack.us. You will then answer questions about the bill's purpose, the steps it has taken in the lawmaking process, and whether you support it.<br><br>Use this template for your research: <a href="https://docs.google.com/document/d/1IEkUVDMroZvWXoZeUQg70fSUoDcQjjvzQ5LcQ5__yow/copy" target="_blank" class="text-blue-600 hover:underline">2.02 Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Including the bill's URL, name, and origin: 15 points<br>- Explaining its purpose and steps in the process: 20 points<br>- Discussing committee assignments: 10 points<br>- Explaining your support/opposition with two reasons: 40 points<br>- Checking for grammar and spelling: 10 points<br><br><div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vRbpUBUuAZwFC5N2Y1xIBQcaUKkTSzuJBh1KNKA1L_VxJEF6hme6axkZyWNbvdmLEgjCzn6u_D8BjXg/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`},
+                "2.04": { response: `For assignment 2.04, you will research two organizations in the federal bureaucracy (like Cabinet departments or agencies). You'll describe what they do, how they help the executive branch, find a recent news story about them, and explain how they affect your life.<br><br>This template will help you organize your findings: <a href="https://docs.google.com/document/d/1sbR0woQ_9Kgc_79SoKiH6358oB4ybfRdFihoPc-Rn5s/copy" target="_blank" class="text-blue-600 hover:underline">2.04 Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Summarizing what each organization does (with an image): 20 points<br>- Explaining how they fulfill the duties of the executive branch: 10 points<br>- Summarizing a recent news event for each: 20 points<br>- Explaining their effect on your life with two examples: 20 points<br>- Organization and MLA citations: 20 points<br>- Grammar and spelling: 10 points<br><br><div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vRJX6fs9_H2yp1RTmM7yhU_Eq-xJsuC0qfn-Q2NABqJdBGxIEZp4nq1TJtpxkPrO2ZNTNIbYGwLmMiJ/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`},
+                "2.07": { response: `For assignment 2.07, you'll act as a judge for one of three scenarios. Your job is to identify a precedent case from the lesson that relates to your scenario, explain your ruling based on that precedent and the Constitution, and describe whether your ruling is a 'strict' or 'loose' interpretation.<br><br>You can use this template to structure your response: <a href="https://docs.google.com/document/d/107zGwS-p83fZR5Gra3WhN-lA0_o-01_uS8q5SqX0l5k/copy" target="_blank" class="text-blue-600 hover:underline">2.07 Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Identify precedent case(s) and explain the connection: 15 points<br>- Explain your ruling and how the precedent influenced it: 15 points<br>- Explain how the school's action aligns with or violates the Constitution: 20 points<br>- Explain if your ruling is a 'loose' or 'strict' interpretation: 15 points<br>- Discuss possible reasoning for a dissenting opinion: 15 points<br>- Organize work into paragraphs: 10 points<br>- Check for spelling and grammar errors: 10 points<br><br>You can ask me for '2.07 scenarios' to get started.`, "interactive_guide": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSv5iTKJRb1WvopQp-upqzbZiB9ERRW5QT9dp0_glFZ28pNqrJcbpa2BTfQVsGGCBePqrlJrqJaOhVP/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>` },
+                "2.09": { response: `For the 2.09 Honors assignment, you'll choose a specific Supreme Court case related to federalism, research it using at least three credible sources, and write an essay analyzing the case.<br><br>Use this template to organize your essay: <a href="https://docs.google.com/document/d/10K6Dbr1VR6z1wnTdsoLl6qAkAbufxwWuXOoQmBF3iJA/copy" target="_blank" class="text-blue-600 hover:underline">2.09H Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Citing 3 sources in MLA format: 10 points<br>- Introduction and Conclusion: 20 points<br>- Describing the case and the Court's opinion (with 2 facts for each): 30 points<br>- Explaining the case's effect on U.S. federalism (with 2 facts): 15 points<br>- Identifying its relation to federalism and checking grammar: 25 points<br><br><strong><small>Note: This is an honors assignment and is not required if you are in the regular version of the course.</small></strong>`, "interactive_guide": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSAvFeCAzygQOchidcPFvf8GygnxKAj_hRUy6jLZUFbDylm8kXZp4gsLWG000pLhY9GAy-h9obPGN84/embed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`},
+                "3.03": { response: `Assignment 3.03 is an essay about balancing individual rights with the common good. You'll choose one of three policy scenarios, research arguments for and against it (using four sources), and then write an essay where you take a side and justify your position.<br><br>This template can help you organize your essay: <a href="https://docs.google.com/document/d/1V3Aqt0M1tEHYKu-nszxph1YFvbBwGQqXsaWizwssbK8/copy" target="_blank" class="text-blue-600 hover:underline">3.03 Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Introduction (discuss the issue and proposed limitation): 15 points<br>- Support Paragraph (two reasons with sources): 15 points<br>- Oppose Paragraph (two reasons with sources): 15 points<br>- Conclusion (state and defend your position): 15 points<br>- Cite all four sources in MLA format: 20 points<br>- Organize work into clear paragraphs: 10 points<br>- Clarity & Grammar: 10 points<br><br>You can ask me for '3.03 scenarios' to see the topics.`, "interactive_guide": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQ8CE_Q6bSH4RZMjY2LIxRew4upBjVrmUGeGel-rq0FGxuj4ba_H4gPezL4rfCt79vtlwJY8hL21bZT/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>` },
+                 "3.05": { response: `For assignment 3.05, you will write a public policy analysis. You'll research a current policy, explain its purpose, identify who benefits and who bears the costs, and then make a recommendation to support, change, or reject the policy, using facts to back up your position.<br><br>Use this template to guide your analysis: <a href="https://docs.google.com/document/d/1Gfx18ZtUDOh_6RPymdP6rpbJhCXUcbmF-2lyGfuJLlU/copy" target="_blank" class="text-blue-600 hover:underline">3.05 Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Explaining the policy's purpose: 15 points<br>- Explaining the costs and benefits (including for third parties): 20 points<br>- Stating your recommendation (support, change, or reject): 15 points<br>- Explaining your position with verifiable facts: 20 points<br>- MLA citations for sources: 10 points<br>- Organization and grammar: 20 points`, "interactive_guide": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSio35PBIOTESLblkvwO8Wt86B1AMRGSGifIN3qrMd2LXir3XV1Wf18KBSZid2TGsL0AZWLQYeHjBkR/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`},
+                "3.07": { response: `For assignment 3.07, you will find two political media items (like cartoons, ads, or articles) on the same topic and from the last year. You will then write five paragraphs analyzing them.<br><br>This template can help you organize your analysis: <a href="https://docs.google.com/document/d/1_5r9zcM1m1N7Yizno17wo0ZTbjoJiGfk5r-psTu2OkU/copy" target="_blank" class="text-blue-600 hover:underline">3.07 Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Paragraph 1 (Media 1): Explain the political message and background. (15 points)<br>- Paragraph 2 (Media 1): Explain the elements of bias and persuasive strategies. (15 points)<br>- Paragraph 3 (Media 2): Explain the political message and background. (15 points)<br>- Paragraph 4 (Media 2): Explain the elements of bias and persuasive strategies. (15 points)<br>- Paragraph 5: Discuss how media has changed and affected political communication. (20 points)<br>- Organization and Grammar: 20 points`, "interactive_guide": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vTk8M-fRc48Fyc5vFxsmZdetul9YPzzVrDjvddES73pm8iHJNftYTfu67q_q0AGPKZLhwt4PG8arhWi/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`},
+                "3.09": { response: `For the 3.09 Honors assignment, you will write an essay about the influence of money in politics, focusing on either lobbying, campaign donations, or election costs. You'll need to research three credible sources.<br><br>Use this template to structure your essay: <a href="https://docs.google.com/document/d/1ubR9vltlE03ZLfc9iUHYRV7gyx8I2HCtImubfH1yRpo/copy" target="_blank" class="text-blue-600 hover:underline">3.09H Template</a><br><br><strong>Here's how you'll be graded:</strong><br>- Citing 3 sources in MLA format: 15 points<br>- Introduction & Conclusion: 20 points<br>- Describing your sources' content and how events affect the democratic process (with evidence): 20 points<br>- Explaining the connection to a founding principle and how money can influence voters/officials (with evidence): 20 points<br>- Other content and grammar requirements: 25 points<br><br><strong><small>Note: This is an honors assignment and is not required if you are in the regular version of the course.</small></strong>`, "interactive_guide": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vTKHg9hcGJRXQOgzlfyWtKr-zYy5ve81HoPBack3WE2uNoJRJvMlxn6fbUg8WeoH_r3fG1orrmR4QNd/embed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`}
+            },
+            rubrics: {
+                 "1.02": { response: `Of course! Here is the rubric for assignment 1.02:<br>
+                    - <strong>Respond in complete paragraphs:</strong> 10 points<br>
+                    - <strong>Choose two founding principles</strong> that connect to your scenario: 20 points<br>
+                    - <strong>Explain the connection</strong> between the principles and the scenario in a complete paragraph: 20 points<br>
+                    - <strong>Explain how the Declaration of Independence reflects those two principles</strong>, using details from the lesson: 20 points<br>
+                    - <strong>Include a modern photograph</strong> representing one of the principles: 10 points<br>
+                    - <strong>Explain how the photograph reflects the principle</strong> in complete sentences: 20 points<br>
+                    - <strong>Check for spelling/grammar errors:</strong> 10 points`},
+                "1.05": { response: `Here is the rubric for assignment 1.05:<br>
+                    - <strong>Using the template:</strong> 10 points<br>
+                    - <strong>Explaining how the Constitution promotes "in order to form a more perfect union":</strong> 10 points<br>
+                    - <strong>Explaining how the Constitution promotes "establish justice":</strong> 10 points<br>
+                    - <strong>Explaining how the Constitution promotes "insure domestic tranquility":</strong> 10 points<br>
+                    - <strong>Explaining how the Constitution promotes "provide for the common defense":</strong> 5 points<br>
+                    - <strong>Explaining how the Constitution promotes "promote the general welfare":</strong> 10 points<br>
+                    - <strong>Describing where "secure the blessings of liberty" is in the Constitution:</strong> 5 points<br>
+                    - <strong>Answering the reflection question with support:</strong> 30 points<br>
+                    - <strong>Checking for grammar and spelling:</strong> 10 points` },
+                "1.07": { response: `Here is the rubric for assignment 1.07:<br>
+                    - <strong>Organization/using template:</strong> 10 points<br>
+                    - <strong>Describing the type of government:</strong> 15 points<br>
+                    - <strong>Explaining features of democratization:</strong> 15 points<br>
+                    - <strong>Explaining the economic system:</strong> 15 points<br>
+                    - <strong>Comparing the country's economy to the US (with data):</strong> 15 points<br>
+                    - <strong>Explaining how the systems conflict/support U.S. principles:</strong> 20 points<br>
+                    - <strong>Checking for grammar and spelling:</strong> 10 points` },
+                "1.09": { response: `Here is the rubric for the 1.09 Honors assignment:<br>
+                    - <strong>Citing 3 articles in MLA format:</strong> 15 points<br>
+                    - <strong>Including an introduction and conclusion:</strong> 20 points<br>
+                    - <strong>Explaining the event and its effect on the country (with 2 pieces of evidence):</strong> 20 points<br>
+                    - <strong>Explaining how a founding principle is represented (with 2 pieces of evidence):</strong> 20 points<br>
+                    - <strong>Other content requirements (chosen event, principle):</strong> 15 points<br>
+                    - <strong>Grammar and spelling:</strong> 10 points<br><br><strong><small>Note: This is an honors assignment and is not required if you are in the regular version of the course.</small></strong>`},
+                "2.02": { response: `Here is the rubric for assignment 2.02:<br>
+                    - <strong>Including the bill's URL, name, and origin:</strong> 15 points<br>
+                    - <strong>Explaining its purpose and steps in the process:</strong> 20 points<br>
+                    - <strong>Discussing committee assignments:</strong> 10 points<br>
+                    - <strong>Explaining your support/opposition with two reasons:</strong> 40 points<br>
+                    - <strong>Checking for grammar and spelling:</strong> 10 points`},
+                "2.04": { response: `Here is the rubric for assignment 2.04:<br>
+                    - <strong>Summarizing what each organization does (with an image):</strong> 20 points<br>
+                    - <strong>Explaining how they fulfill the duties of the executive branch:</strong> 10 points<br>
+                    - <strong>Summarizing a recent news event for each:</strong> 20 points<br>
+                    - <strong>Explaining their effect on your life with two examples:</strong> 20 points<br>
+                    - <strong>Organization and MLA citations:</strong> 20 points<br>
+                    - <strong>Grammar and spelling:</strong> 10 points`},
+                "2.07": { response: `Certainly! Here's the rubric for the 2.07 Judicial Decisions assignment:<br>
+                    - <strong>Identify precedent case(s)</strong> from the lesson and explain the connection: 15 points<br>
+                    - <strong>Explain your ruling</strong> and how the precedent case influenced it: 15 points<br>
+                    - <strong>Explain how the school's action aligns with or violates the Constitution</strong>: 20 points<br>
+                    - <strong>Explain if your ruling is a 'loose' or 'strict' interpretation</strong>: 15 points<br>
+                    - <strong>Discuss possible reasoning for a dissenting opinion</strong>: 15 points<br>
+                    - <strong>Organize work into paragraphs</strong> (using the template is recommended): 10 points<br>
+                    - <strong>Check for spelling and grammar errors:</strong> 10 points`},
+                "2.09": { response: `Here is the rubric for the 2.09 Honors assignment:<br>
+                    - <strong>Citing 3 sources in MLA format:</strong> 10 points<br>
+                    - <strong>Introduction and Conclusion:</strong> 20 points<br>
+                    - <strong>Describing the case and the Court's opinion (with 2 facts for each):</strong> 30 points<br>
+                    - <strong>Explaining the case's effect on U.S. federalism (with 2 facts):</strong> 15 points<br>
+                    - <strong>Identifying its relation to federalism and checking grammar:</strong> 25 points<br><br><strong><small>Note: This is an honors assignment and is not required if you are in the regular version of the course.</small></strong>`},
+                "3.03": { response: `Here is the rubric for the 3.03 The Common Good essay:<br>
+                    - <strong>Introduction:</strong> Discuss your chosen scenario as an issue and describe the proposed limitation to individual rights: 15 points<br>
+                    - <strong>Support Paragraph:</strong> Provide two reasons to support the limitation, citing your research sources: 15 points<br>
+                    - <strong>Oppose Paragraph:</strong> Provide two reasons to oppose the limitation, citing your research sources: 15 points<br>
+                    - <strong>Conclusion:</strong> State and defend your final position with support: 15 points<br>
+                    - <strong>Cite all four sources</strong> in MLA format: 20 points<br>
+                    - <strong>Organization:</strong> Organize your work into clear paragraphs (template recommended): 10 points<br>
+                    - <strong>Clarity & Grammar:</strong> Review for spelling, grammar, and clarity: 10 points`},
+                "3.05": { response: `Here is the rubric for the 3.05 Public Policy analysis:<br>
+                    - <strong>Explaining the policy's purpose:</strong> 15 points<br>
+                    - <strong>Explaining the costs and benefits (including for third parties):</strong> 20 points<br>
+                    - <strong>Stating your recommendation (support, change, or reject):</strong> 15 points<br>
+                    - <strong>Explaining your position with verifiable facts:</strong> 20 points<br>
+                    - <strong>MLA citations for sources:</strong> 10 points<br>
+                    - <strong>Organization and grammar:</strong> 20 points`},
+                "3.07": { response: `Here is the rubric for the 3.07 Media Analysis:<br>
+                    - <strong>Paragraph 1 (Media 1):</strong> Explain the political message and background. (15 points)<br>
+                    - <strong>Paragraph 2 (Media 1):</strong> Explain the elements of bias and persuasive strategies. (15 points)<br>
+                    - <strong>Paragraph 3 (Media 2):</strong> Explain the political message and background. (15 points)<br>
+                    - <strong>Paragraph 4 (Media 2):</strong> Explain the elements of bias and persuasive strategies. (15 points)<br>
+                    - <strong>Paragraph 5:</strong> Discuss how media has changed and affected political communication. (20 points)<br>
+                    - <strong>Organization and Grammar:</strong> 20 points`},
+                "3.09": { response: `Here is the rubric for the 3.09 Honors assignment:<br>
+                    - <strong>Citing 3 sources in MLA format:</strong> 15 points<br>
+                    - <strong>Introduction & Conclusion:</strong> 20 points<br>
+                    - <strong>Describing your sources' content and how events affect the democratic process (with evidence):</strong> 20 points<br>
+                    - <strong>Explaining the connection to a founding principle and how money can influence voters/officials (with evidence):</strong> 20 points<br>
+                    - <strong>Other content and grammar requirements:</strong> 25 points<br><br><strong><small>Note: This is an honors assignment and is not required if you are in the regular version of the course.</small></strong>`}
+            },
+            templates: {
+                "generic": { response: "Are you looking for a template for a specific assignment? For example, you can ask, 'template for 1.02'." },
+                "1.02": { response: `Here is the Google Doc template for assignment 1.02. Click the link to make a copy: <a href="https://docs.google.com/document/d/1A7ecKjJX51AxOi1INnNnApDR9NNeowi5jI5pIEbayfw/copy" target="_blank" class="text-blue-600 hover:underline">1.02 Template</a>` },
+                "1.05": { response: `Here is the Google Doc template for assignment 1.05. Click the link to make a copy: <a href="https://docs.google.com/document/d/1n6sthfqT4qNGOvbWmTzhdusv1_5sPgaCspcLmhzpc7Y/copy" target="_blank" class="text-blue-600 hover:underline">1.05 Template</a>` },
+                "1.07": { response: `Here is the Google Doc template for assignment 1.07. Click the link to make a copy: <a href="https://docs.google.com/document/d/1YFtUvcb23xGxsp6nLgPhFiy0FM3t45EWBpa9l_qH2pY/copy" target="_blank" class="text-blue-600 hover:underline">1.07 Template</a>` },
+                "1.09H": { response: `Here is the Google Doc template for assignment 1.09H. Click the link to make a copy: <a href="https://docs.google.com/document/d/1qDvC7KZKjmAeQIEPo94iSLSYloJ2zkGIyMml6QVBcmA/copy" target="_blank" class="text-blue-600 hover:underline">1.09H Template</a>` },
+                "2.02": { response: `Here is the Google Doc template for assignment 2.02. Click the link to make a copy: <a href="https://docs.google.com/document/d/1IEkUVDMroZvWXoZeUQg70fSUoDcQjjvzQ5LcQ5__yow/copy" target="_blank" class="text-blue-600 hover:underline">2.02 Template</a>` },
+                "2.04": { response: `Here is the Google Doc template for assignment 2.04. Click the link to make a copy: <a href="https://docs.google.com/document/d/1sbR0woQ_9Kgc_79SoKiH6358oB4ybfRdFihoPc-Rn5s/copy" target="_blank" class="text-blue-600 hover:underline">2.04 Template</a>` },
+                "2.07": { response: `Here is the Google Doc template for assignment 2.07. Click the link to make a copy: <a href="https://docs.google.com/document/d/107zGwS-p83fZR5Gra3WhN-lA0_o-01_uS8q5SqX0l5k/copy" target="_blank" class="text-blue-600 hover:underline">2.07 Template</a>` },
+                "2.09H": { response: `Here is the Google Doc template for assignment 2.09H. Click the link to make a copy: <a href="https://docs.google.com/document/d/10K6Dbr1VR6z1wnTdsoLl6qAkAbufxwWuXOoQmBF3iJA/copy" target="_blank" class="text-blue-600 hover:underline">2.09H Template</a>` },
+                "3.03": { response: `Here is the Google Doc template for assignment 3.03. Click the link to make a copy: <a href="https://docs.google.com/document/d/1V3Aqt0M1tEHYKu-nszxph1YFvbBwGQqXsaWizwssbK8/copy" target="_blank" class="text-blue-600 hover:underline">3.03 Template</a>` },
+                "3.05": { response: `Here is the Google Doc template for assignment 3.05. Click the link to make a copy: <a href="https://docs.google.com/document/d/1Gfx18ZtUDOh_6RPymdP6rpbJhCXUcbmF-2lyGfuJLlU/copy" target="_blank" class="text-blue-600 hover:underline">3.05 Template</a>` },
+                "3.07": { response: `Here is the Google Doc template for assignment 3.07. Click the link to make a copy: <a href="https://docs.google.com/document/d/1_5r9zcM1m1N7Yizno17wo0ZTbjoJiGfk5r-psTu2OkU/copy" target="_blank" class="text-blue-600 hover:underline">3.07 Template</a>` },
+                "3.09H": { response: `Here is the Google Doc template for assignment 3.09H. Click the link to make a copy: <a href="https://docs.google.com/document/d/1ubR9vltlE03ZLfc9iUHYRV7gyx8I2HCtImubfH1yRpo/copy" target="_blank" class="text-blue-600 hover:underline">3.09H Template</a>` }
+            },
+            scenarios: {
+                "1.02": {
+                    "A": "<strong>Scenario A:</strong><br>Your local council approves a new rule after many community meetings and citizen comments. The rule states that all new building permit applications require an 'environmental impact study.' The purpose is to ensure that the building plans will prevent unnecessary harm to local residents, wildlife, and plant life.",
+                    "B": "<strong>Scenario B:</strong><br>A state law allows certain people and businesses to be exempt from paying sales taxes. Some citizen groups think the exemption is unfair. They gathered the required support to have the issue added to the voting ballot. On Election Day, voters will decide whether to repeal, or end, the state law allowing the exemptions.",
+                    "C": "<strong>Scenario C:</strong><br>Your senator in the U.S. Congress votes to approve emergency relief for another state. Much of the state has suffered a recent natural disaster. Many in your state are upset that their federal income tax dollars will go to another state. Your senator addressed the criticism on social media. The senator pleaded for people to remember that homes and businesses have been lost, that we're all Americans, and that next time it may be your state needing help."
+                },
+                "2.07": {
+                    "A": "<strong>Scenario A:</strong><br>A teacher at Highland High School requires all of their students to bring in food from a Spanish country as a part of their Spanish class project. The due date for this project fell during the Islamic holy month of Ramadan. During Ramadan, Muslims must abstain from all food or drink from dawn to sunset. A Muslim student was not able to participate in the project and received no credit, lowering the student's class average by a full letter grade. The parent argued that this was a violation of the student's rights...",
+                    "B": "<strong>Scenario B:</strong><br>During a live online U.S. Government class, the teacher had students complete an activity discussing the characteristics of political parties. Two students, J.B. and W.S., got into a debate about the topic, and J.B. took a screenshot of W.S.'s opinion and created a post about them on their private social media page. The post included W.S.'s name and several emojis, like the skull emoji, which was interpreted as threatening... J.B. was suspended... The parents of the suspended student believed their child had the right to post on their private social media page without consequence.",
+                    "C": "<strong>Scenario C:</strong><br>During lunch in the school parking lot, a teacher filmed a student vaping in their car. The teacher showed the video to the principal. The principal removed the student from class and searched them for the vaping product, which they found. The principal suspended the student for 10 days... The parents of the student argue that the student's rights were violated and they were illegally searched..."
+                },
+                "3.03": {
+                    "A": "<strong>Campus Safety:</strong><br>The parents of local high school students are concerned about student safety on campus. At the recent school board meeting, they proposed installing metal detectors at the entrance to each high school.",
+                    "B": "<strong>Smoking and Vaping:</strong><br>Local health officials warn there has been a sharp rise in minors with lung damage and disease related to smoking, vaping, or involuntary inhalation. At a council meeting, they proposed a ban on the sale of tobacco and vape products anywhere in the county.",
+                    "C": "<strong>Teen Curfew:</strong><br>Local arrest reports show that most violent crimes occur in the hours between 10 p.m. and 4 a.m. The data also reveal that most suspects and victims are teenagers. The city council has proposed a 10 p.m. curfew for all minors (those under 18 years of age)."
+                }
+            },
+            scenario_help: {
+                "1.02": {
+                    "A": "<strong>Hint for Scenario A:</strong><br>This scenario describes the government taking action to protect the well-being and safety of its citizens and the environment. Think about the fundamental agreement where people allow the government to rule in order to protect their basic rights to life, liberty, and property. What is that concept called? Also, consider what basic rights are being protected here.",
+                    "B": "<strong>Hint for Scenario B:</strong><br>Here, citizens are taking direct action to change a law they feel is unjust. What founding principle states that the power of the government comes directly from the people? Also, think about the principle that is violated when a law doesn't apply to everyone in the same way. What concept says all people should be treated the same by the government?",
+                    "C": "<strong>Hint for Scenario C:</strong><br>This scenario shows the government acting to protect the fundamental well-being (life, safety) of its citizens, even in another state, after a disaster. What is the core agreement that says the government's role is to protect the basic rights of the people? Think about what fundamental rights are at risk during a natural disaster."
+                },
+                "2.07": {
+                    "A": "<strong>Hint for Scenario A:</strong><br>This case deals with a conflict between a school requirement and a student's religious freedom. You should look at precedent cases related to the First Amendment's Free Exercise Clause in schools. A key case to review from your lesson is *Wisconsin v. Yoder*. How does that case balance religious freedom with state education rules?",
+                    "B": "<strong>Hint for Scenario B:</strong><br>This situation involves student speech that happens off-campus (on social media) but disrupts the school environment. The central question is about the limits of student free speech. The most relevant precedent case from your lesson is *Mahanoy v. B.L.*, but also consider *Tinker v. Des Moines*. How does your scenario differ from those, especially since it involves bullying?",
+                    "C": "<strong>Hint for Scenario C:</strong><br>This scenario is about a search of a student on school property. This brings up the Fourth Amendment protection against unreasonable searches. The key precedent case from your lesson to consider is *New Jersey v. T.L.O.* How does that case define what is a 'reasonable' search in a school setting?"
+                },
+                "3.03": {
+                    "A": "<strong>Hint for the Campus Safety scenario:</strong><br>You'll need to research arguments for and against installing metal detectors. For the 'pro' side, think about arguments related to deterring weapons and ensuring physical safety. For the 'con' side, consider student privacy (Fourth Amendment), the financial cost, and whether it creates a negative or prison-like school environment.",
+                    "B": "<strong>Hint for the Smoking and Vaping scenario:</strong><br>Your essay should explore the arguments for and against a county-wide ban. Arguments 'for' the ban would focus on public health, protecting minors, and reducing healthcare costs. Arguments 'against' would focus on individual liberty, the economic impact on businesses, and whether a ban is truly effective.",
+                    "C": "<strong>Hint for the Teen Curfew scenario:</strong><br>For this essay, you'll research the pros and cons of a curfew. The 'pro' arguments will likely cite crime statistics and protecting teens from harm. The 'con' arguments might question the effectiveness of curfews, point to potential discrimination, and argue that it punishes all teens for the actions of a few."
+                }
+            },
+             interactive_guides: {
+                "1.02": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vT5Evmvqk_EOPv8sA4eXVPEvuMikGqrnPWc0U8UJRaF271XVV6EIWp-ciUwt4AuWITagwtC4otx4N2v/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`,
+                "1.05": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSHFZYQx8bkMumz7umziC4DSAsxdWDO5mxb-qoZrrtqkpP-ef3Pmy9SJ06-ArqSGAZ8wUQV2M0HKEXm/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`,
+                "1.07": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vTCSiL76FNuD6UZmJsdpoUWkFcer68yFC2xaLmxk1H1f381bBRSqWxqzOdMEF_w_Wy0c2iGCUexpaqT/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`,
+                "1.09": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSyd0f8htAfsBpwnJ-6ait0dpOBozqi-aF-ccM9fehZPvqEleqXGrRW69jdq8CzSqVvj4jb5WuMop2v/embed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`,
+                "2.02": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vRbpUBUuAZwFC5N2Y1xIBQcaUKkTSzuJBh1KNKA1L_VxJEF6hme6axkZyWNbvdmLEgjCzn6u_D8BjXg/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`,
+                "2.04": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vRJX6fs9_H2yp1RTmM7yhU_Eq-xJsuC0qfn-Q2NABqJdBGxIEZp4nq1TJtpxkPrO2ZNTNIbYGwLmMiJ/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`,
+                "2.07": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSv5iTKJRb1WvopQp-upqzbZiB9ERRW5QT9dp0_glFZ28pNqrJcbpa2BTfQVsGGCBePqrlJrqJaOhVP/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`,
+                "2.09": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSAvFeCAzygQOchidcPFvf8GygnxKAj_hRUy6jLZUFbDylm8kXZp4gsLWG000pLhY9GAy-h9obPGN84/embed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`,
+                "3.03": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQ8CE_Q6bSH4RZMjY2LIxRew4upBjVrmUGeGel-rq0FGxuj4ba_H4gPezL4rfCt79vtlwJY8hL21bZT/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`,
+                "3.05": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vSio35PBIOTESLblkvwO8Wt86B1AMRGSGifIN3qrMd2LXir3XV1Wf18KBSZid2TGsL0AZWLQYeHjBkR/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`,
+                "3.07": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vTk8M-fRc48Fyc5vFxsmZdetul9YPzzVrDjvddES73pm8iHJNftYTfu67q_q0AGPKZLhwt4PG8arhWi/pubembed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe></div>`,
+                "3.09": `<div class="iframe-container"><iframe src="https://docs.google.com/presentation/d/e/2PACX-1vTKHg9hcGJRXQOgzlfyWtKr-zYy5ve81HoPBack3WE2uNoJRJvMlxn6fbUg8WeoH_r3fG1orrmR4QNd/embed?start=false&loop=false&delayms=3000" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>`
+            },
+            answer_guard: {
+                keywords: ["answer for", "what is the answer", "give me the answers", "do this for me", "write this for me", "solve this", "solution for"]
+            },
+            clarification_keywords: ["can i write about", "does this count", "is it okay if", "is my topic", "does... count for"]
+        };
+
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const chatContainer = document.getElementById('chat-container');
+        
+        const addMessage = (sender, message) => {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('mb-4', 'flex', 'flex-col', sender === 'user' ? 'items-end' : 'items-start');
+            
+            const messageBubble = document.createElement('div');
+            messageBubble.classList.add('p-4', 'rounded-2xl', 'max-w-lg', 'text-slate-800', 'leading-relaxed');
+            messageBubble.classList.add(sender === 'user' ? 'bg-blue-100' : 'bg-slate-200');
+            messageBubble.innerHTML = message;
+
+            messageElement.appendChild(messageBubble);
+            chatContainer.appendChild(messageElement);
+            messageElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        };
+        
+        const showTypingIndicator = () => {
+             const typingElement = document.createElement('div');
+             typingElement.id = 'typing-indicator';
+             typingElement.classList.add('mb-4', 'flex', 'items-start');
+             typingElement.innerHTML = `
+                 <div class="p-4 rounded-2xl max-w-lg text-slate-800 bg-slate-200 flex items-center space-x-2">
+                     <div class="w-2 h-2 bg-slate-500 rounded-full animate-pulse" style="animation-delay: 0s;"></div>
+                     <div class="w-2 h-2 bg-slate-500 rounded-full animate-pulse" style="animation-delay: 0.2s;"></div>
+                     <div class="w-2 h-2 bg-slate-500 rounded-full animate-pulse" style="animation-delay: 0.4s;"></div>
+                 </div>
+             `;
+             chatContainer.appendChild(typingElement);
+             typingElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        const removeTypingIndicator = () => {
+            const typingIndicator = document.getElementById('typing-indicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+        }
+
+        /**
+         * Parses user input to find a flexible assignment number (e.g., "1.02", "102", "1 02").
+         * @param {string} input - The user's input string.
+         * @returns {string|null} The formatted assignment number (e.g., "1.02") or null if not found.
+         */
+        const getAssignmentNumber = (input) => {
+            // This regex looks for patterns like: 1.02, 1 02, 102
+            const match = input.match(/(\d)\s?[.]?\s?(\d\d)/);
+            if (match) {
+                // Reconstructs the number into the standard "1.02" format used in the knowledge base
+                return `${match[1]}.${match[2]}`;
+            }
+            return null;
+        };
+
+
+        const getBotResponse = (input) => {
+            const lowerInput = input.toLowerCase().trim();
+            const assignmentNum = getAssignmentNumber(lowerInput);
+            let response = "";
+
+            // --- Priority 1: Reset conversation context on greeting or thanks ---
+            const resetKeywords = ["hello", "hi", "thank", "thanks"];
+            if (resetKeywords.some(kw => lowerInput.includes(kw))) {
+                conversationContext = null;
+                pendingDbaSchedule = false;
+                pendingDbaPrep = false;
+                pendingPacingInfo = false;
+            }
+            
+            // --- Priority 2: Academic Integrity & Subjective Question Guardrails ---
+            if (knowledgeBase.answer_guard.keywords.some(kw => lowerInput.includes(kw) && !(lowerInput.includes("key term") || lowerInput.includes("key concept")))) {
+                return knowledgeBase.general.academic_integrity;
+            }
+            if (knowledgeBase.clarification_keywords.some(kw => lowerInput.includes(kw))) {
+                return `That's a great question. For specific topics or creative ideas for an assignment, it's always best to check with Mr. Bitter directly to make sure you're on the right track. Here is his contact information:<br><br>${knowledgeBase.general.teacher_contact}`;
+            }
+
+            // --- Priority 3: Modal Flows (like DBA and Pacing) ---
+            if (pendingDbaSchedule) {
+                const moduleMatch = lowerInput.match(/[1-3]/);
+                if (moduleMatch) {
+                    pendingDbaSchedule = false;
+                    return knowledgeBase.dba_schedule[moduleMatch[0]];
+                }
+                return "Please enter a valid module number (1, 2, or 3) to get the correct DBA schedule link.";
+            }
+            if (pendingDbaPrep) {
+                const moduleMatch = lowerInput.match(/[1-3]/);
+                if (moduleMatch) {
+                    pendingDbaPrep = false;
+                    return knowledgeBase.dba_prep[moduleMatch[0]].resources;
+                }
+                return "Please enter a valid module number (1, 2, or 3) to get the sample questions.";
+            }
+             if (pendingPacingInfo) {
+                const weekMatch = lowerInput.match(/[1-8]/);
+                if (weekMatch) {
+                    pendingPacingInfo = false;
+                    const weekNum = weekMatch[0];
+                    const paceInfo = knowledgeBase.pacing_details[weekNum];
+                    return `For <strong>Week ${weekNum}</strong>, here are the assignments:<br><br>
+                            • <em>16-Week Pace:</em> ${paceInfo["16-week"]}<br>
+                            • <em>8-Week Pace:</em> ${paceInfo["8-week"]}<br><br>
+                            <small><em>*H = Honors students only. A '+' indicates a DBA for that assignment.</em></small>`;
+                }
+                return "Please enter a valid week number (1-8).";
+            }
+
+             if (lowerInput.includes("schedule") && lowerInput.includes("dba")) {
+                pendingDbaSchedule = true;
+                return knowledgeBase.general.dba_prompt;
+            }
+            if (lowerInput.includes("prepare") && lowerInput.includes("dba")) {
+                pendingDbaPrep = true;
+                return knowledgeBase.general.dba_prep_prompt;
+            }
+             if (lowerInput.includes("what is a dba") || lowerInput.includes("how do dba's work")) {
+                return knowledgeBase.general.dba_info;
+            }
+
+            // --- Priority 4: General Keywords that don't depend on context ---
+            if (lowerInput.includes("pace") || lowerInput.includes("pacing") || lowerInput.includes("what should i work on")) {
+                 if (getAssignmentNumber(lowerInput) === null && !lowerInput.match(/week\s*(\d+)/)) {
+                    pendingPacingInfo = true;
+                    return knowledgeBase.general.pacing_prompt;
+                }
+            }
+            if (lowerInput.includes("hello") || lowerInput.includes("hi")) return knowledgeBase.general.greeting;
+            if (lowerInput.includes("thank")) return knowledgeBase.general.thanks;
+            if (lowerInput.includes("submit")) return knowledgeBase.general.submission;
+            if (lowerInput.includes("teacher") || lowerInput.includes("contact")) return knowledgeBase.general.teacher_contact;
+            if (lowerInput.includes("access") && lowerInput.includes("lesson")) return knowledgeBase.general.accessing_lessons;
+            if (lowerInput.includes("live") || lowerInput.includes("calendar")) return knowledgeBase.general.live_lesson;
+            if (lowerInput.includes("tech")) return knowledgeBase.general.tech_support;
+            if (lowerInput.includes("note guide") || lowerInput.includes("noteguide")) return knowledgeBase.general.note_guides_link;
+            if (lowerInput.includes("review video")) return knowledgeBase.general.review_videos;
+            
+            // --- Priority 5: Assignment-Specific Logic ---
+            if (assignmentNum) {
+                const normalizedAssignmentNum = assignmentNum.replace('h', '');
+                conversationContext = normalizedAssignmentNum; // Set the context for future messages
+
+                // Handle quiz assignments first
+                if (knowledgeBase.quiz_assignments[normalizedAssignmentNum]) {
+                    return knowledgeBase.quiz_assignments[normalizedAssignmentNum];
+                }
+
+                let assignmentKey = normalizedAssignmentNum;
+                // Handle Honors assignments specifically for templates
+                if (normalizedAssignmentNum.endsWith("09")) {
+                    assignmentKey = normalizedAssignmentNum + "H";
+                }
+
+                // Check for the most specific requests first
+                if (lowerInput.includes("scenarios") || lowerInput.includes("scenario")) {
+                    const scenariosForAssignment = knowledgeBase.scenarios[normalizedAssignmentNum];
+                    if (scenariosForAssignment) {
+                        let responseText = `Here are the scenarios for assignment ${normalizedAssignmentNum}:<br><br>`;
+                        for (const key in scenariosForAssignment) {
+                            responseText += `${scenariosForAssignment[key]}<br><br>`;
+                        }
+                        return responseText.trim();
+                    } else {
+                        return `It looks like assignment ${normalizedAssignmentNum} doesn't have specific scenarios to choose from. Please check the assignment instructions for the main task.`;
+                    }
+                } else if (lowerInput.includes("rubric")) {
+                    response = knowledgeBase.rubrics[normalizedAssignmentNum]?.response || `I don't have a specific rubric for ${normalizedAssignmentNum}, but you can always find it on the assignment page in your course.`;
+                } else if (lowerInput.includes("template")) {
+                     response = knowledgeBase.templates[assignmentKey]?.response || `Assignment ${assignmentKey} doesn't have a specific template. Be sure to follow the instructions in the lesson.`;
+                } else {
+                    // This is the general "help with 1.02" case
+                    const assignmentHelp = knowledgeBase.assignments[assignmentKey] || knowledgeBase.assignments[normalizedAssignmentNum];
+                    if(assignmentHelp && assignmentHelp.response) {
+                        response = assignmentHelp.response;
+                    } else {
+                        response = `I don't have specific instructions for assignment ${assignmentNum}. Try reviewing the lesson, or ask for 'teacher contact' info.`;
+                    }
+                }
+                return response;
+            }
+
+            // --- Priority 6: Contextual Follow-ups (when no assignment number is in the current message) ---
+            if (conversationContext) {
+                 const scenarioExplainMatch = lowerInput.match(/(?:explain|simplify)\s+scenario\s+([a-c])/i);
+                 if(scenarioExplainMatch){
+                      const scenarioLetter = scenarioExplainMatch[1].toUpperCase();
+                      return knowledgeBase.scenario_help[conversationContext]?.[scenarioLetter] || `I don't have a hint for that scenario. Make sure you've asked about the correct assignment first (e.g., 'help with 2.07').`;
+                 }
+                if (lowerInput.includes("rubric")) {
+                    return knowledgeBase.rubrics[conversationContext]?.response || `I don't have a specific rubric for assignment ${conversationContext}, but you can always find it on the assignment page in your course.`;
+                }
+                if (lowerInput.includes("template")) {
+                     let assignmentKey = conversationContext;
+                     if(conversationContext.endsWith("09")){
+                        assignmentKey = conversationContext + "H";
+                     }
+                    return knowledgeBase.templates[assignmentKey]?.response || `That assignment doesn't have a specific template. Be sure to follow the instructions in the lesson.`;
+                }
+                 if (lowerInput.includes("scenarios") || lowerInput.includes("scenario")) {
+                    const scenariosForAssignment = knowledgeBase.scenarios[conversationContext];
+                    if (scenariosForAssignment) {
+                        let responseText = `Here are the scenarios for assignment ${conversationContext}:<br><br>`;
+                        for (const key in scenariosForAssignment) {
+                            responseText += `${scenariosForAssignment[key]}<br><br>`;
+                        }
+                        return responseText.trim();
+                    } else {
+                         return `It looks like assignment ${conversationContext} doesn't have specific scenarios to choose from. Please check the assignment instructions for the main task.`;
+                    }
+                }
+            }
+            
+            // This handles a vague request like "explain scenario a" when context is not set.
+            if (lowerInput.includes("explain scenario") || lowerInput.includes("simplify scenario")) {
+                return "I can help with that, but which assignment is it for? For example, you can ask me to 'explain scenario A for 1.02'.";
+            }
+
+            // --- Final Fallback ---
+            return knowledgeBase.general.unknown;
+        };
+
+        const handleSend = () => {
+            const message = userInput.value;
+            if (message.trim() === '') return;
+
+            addMessage('user', message);
+            userInput.value = '';
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+
+            showTypingIndicator();
+
+            setTimeout(() => {
+                const botResponse = getBotResponse(message);
+                removeTypingIndicator();
+                addMessage('bot', botResponse);
+                
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+                
+            }, 1000 + Math.random() * 500);
+        };
+
+        sendBtn.addEventListener('click', handleSend);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                handleSend();
+            }
+        });
+
+        window.onload = () => {
+            showTypingIndicator();
+            setTimeout(() => {
+                 removeTypingIndicator();
+                 addMessage('bot', knowledgeBase.general.greeting);
+            }, 1000);
+        };
+    </script>
+</body>
+</html>
